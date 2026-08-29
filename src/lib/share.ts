@@ -25,3 +25,10 @@ export const buildShareText = (checkin: Checkin, shortUrl?: string): string => {
 };
 
 export const canUseWebShare = (): boolean => typeof navigator.share === 'function';
+
+/**
+ * X の Web Intent URL を作る。シェア文と一字一句同じものを流したいので、
+ * url パラメータは使わず text にすべて載せる。
+ */
+export const buildTweetUrl = (checkin: Checkin, shortUrl?: string): string =>
+  `https://x.com/intent/tweet?text=${encodeURIComponent(buildShareText(checkin, shortUrl))}`;

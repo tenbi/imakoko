@@ -6,7 +6,7 @@
     fetchRecentCheckins,
     type Checkin,
   } from './foursquare';
-  import { buildShareText, canUseWebShare } from './share';
+  import { buildShareText, buildTweetUrl, canUseWebShare } from './share';
 
   let { token, onunauthorized }: { token: string; onunauthorized: () => void } = $props();
 
@@ -120,7 +120,42 @@
           {/if}
           <span class="time">{formatTime(checkin.createdAt)}</span>
         </div>
-        <button class="primary" onclick={() => shareCheckin(checkin)}>{actionLabel}</button>
+        <div class="actions">
+          <a
+            class="icon-button"
+            href={buildTweetUrl(checkin, shortUrls[checkin.id])}
+            target="_blank"
+            rel="noreferrer noopener"
+            aria-label="ツイート"
+            title="ツイート"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path
+                fill="currentColor"
+                d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"
+              />
+            </svg>
+          </a>
+
+          <button
+            class="icon-button accent"
+            onclick={() => shareCheckin(checkin)}
+            aria-label={actionLabel}
+            title={actionLabel}
+          >
+            {#if webShare}
+              <svg class="stroke" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d="M12 15V3m0 0L8 7m4-4 4 4" />
+                <path d="M7 11H5.5A1.5 1.5 0 0 0 4 12.5v7A1.5 1.5 0 0 0 5.5 21h13a1.5 1.5 0 0 0 1.5-1.5v-7A1.5 1.5 0 0 0 18.5 11H17" />
+              </svg>
+            {:else}
+              <svg class="stroke" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <rect x="9" y="9" width="11" height="11" rx="2" />
+                <path d="M6 15H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1" />
+              </svg>
+            {/if}
+          </button>
+        </div>
       </li>
     {/each}
   </ul>
@@ -190,8 +225,46 @@
     overflow-wrap: anywhere;
   }
 
-  li button {
+  .actions {
+    display: flex;
+    gap: 0.4rem;
     flex: none;
+  }
+
+  .icon-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.6rem;
+    height: 2.6rem;
+    padding: 0;
+    border-radius: 0.6rem;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    text-decoration: none;
+    cursor: pointer;
+    flex: none;
+  }
+
+  .icon-button.accent {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--accent-text);
+  }
+
+  .icon-button svg {
+    width: 1.2rem;
+    height: 1.2rem;
+    display: block;
+  }
+
+  .icon-button svg.stroke {
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
   }
 
   .reload {
