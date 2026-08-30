@@ -3,11 +3,11 @@ import type { Checkin } from './foursquare';
 /**
  * シェア文を組み立てる。
  *
- *   I'm at スターバックス 渋谷店 in Shibuya, Tōkyō https://www.swarmapp.com/c/xxxxxxxx
+ * シャウトあり:
+ *   ランチなう (@ スターバックス 渋谷店 in Shibuya, Tōkyō) https://www.swarmapp.com/user/.../checkin/...
  *
- *   ランチなう
- *
- * シャウトがある場合のみ、空行を挟んで末尾に付ける。
+ * シャウトなし:
+ *   I'm at スターバックス 渋谷店 in Shibuya, Tōkyō https://www.swarmapp.com/user/.../checkin/...
  */
 export const buildShareText = (checkin: Checkin, shortUrl?: string): string => {
   // 日本の会場は city が欠けていることがあるので、空要素は畳む
@@ -15,13 +15,11 @@ export const buildShareText = (checkin: Checkin, shortUrl?: string): string => {
     .filter(Boolean)
     .join(', ');
 
-  const head = address
-    ? `I'm at ${checkin.venue.name} in ${address}`
-    : `I'm at ${checkin.venue.name}`;
+  const place = address ? `${checkin.venue.name} in ${address}` : checkin.venue.name;
 
-  const line = shortUrl ? `${head} ${shortUrl}` : head;
+  const head = checkin.shout ? `${checkin.shout} (@ ${place})` : `I'm at ${place}`;
 
-  return checkin.shout ? `${line}\n\n${checkin.shout}` : line;
+  return shortUrl ? `${head} ${shortUrl}` : head;
 };
 
 export const canUseWebShare = (): boolean => typeof navigator.share === 'function';

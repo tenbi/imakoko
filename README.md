@@ -8,15 +8,29 @@ Swarm（Foursquare）の直近のチェックインを取得し、OS のシェ�
 
 ## シェアされる文面
 
-```
-I'm at スターバックス 渋谷店 in Shibuya, Tōkyō https://www.swarmapp.com/c/xxxxxxxx
+シャウト（チェックイン時のコメント）がある場合:
 
-ランチなう
+```
+ランチなう (@ スターバックス 渋谷店 in Shibuya, Tōkyō) https://www.swarmapp.com/user/123456789/checkin/59b97e2a0d173f01fd48252e?s=NGWtGIBccpKeOKH
 ```
 
-シャウト（チェックイン時のコメント）が無い場合は1行目のみ。住所は `city, state` を連結するが、
-どちらかが欠けていれば自動的に畳まれる。文面を変えたい場合は `src/lib/share.ts` の
-`buildShareText()` だけを直せばよい。
+無い場合:
+
+```
+I'm at スターバックス 渋谷店 in Shibuya, Tōkyō https://www.swarmapp.com/user/123456789/checkin/59b97e2a0d173f01fd48252e?s=NGWtGIBccpKeOKH
+```
+
+住所は `city, state` を連結するが、どちらかが欠けていれば自動的に畳まれる。
+文面を変えたい場合は `src/lib/share.ts` の `buildShareText()` だけを直せばよい。
+
+### URL について
+
+API が返す `checkinShortUrl` は名前に反して短くない。100文字前後ある。末尾の `?s=` は
+署名付きの共有トークンで、これがあることで他人がログイン無しに閲覧できる。
+`www.swarmapp.com/c/...` のような短い形式は現在は存在しない（404 になる）。
+
+X は投稿内のすべてのリンクを t.co でラップし、実際の長さに関係なく一律23文字として数えるため、
+ツイートに関しては長さのデメリットは無い。
 
 ## セットアップ
 

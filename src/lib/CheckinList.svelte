@@ -8,7 +8,15 @@
   } from './foursquare';
   import { buildShareText, buildTweetUrl, canUseWebShare } from './share';
 
-  let { token, onunauthorized }: { token: string; onunauthorized: () => void } = $props();
+  let {
+    token,
+    onunauthorized,
+    onbusychange,
+  }: {
+    token: string;
+    onunauthorized: () => void;
+    onbusychange?: (busy: boolean) => void;
+  } = $props();
 
   let checkins = $state<Checkin[]>([]);
   let shortUrls = $state<Record<string, string>>({});
@@ -27,42 +35,59 @@
     toastTimer = setTimeout(() => (toast = null), 4000);
   };
 
+  // loading は「初回の読み込み中表示」用。多重実行の抑止は $state ではない
+  // inFlight で行う（loading の初期値が true のため、これで兼用すると初回が走らない）。
+  let inFlight = false;
+
   const load = async () => {
+    if (inFlight) return; // 連打で読み込みが重ならないようにする
+    inFlight = true;
     loading = true;
+    onbusychange?.(true);
     error = null;
     shortUrls = {};
 
     try {
-      checkins = await fetchRecentCheckins(token);
-    } catch (e) {
-      if (e instanceof FoursquareError && e.isAuthError) {
-        onunauthorized();
-        return;
-      }
-      error = e instanceof Error ? e.message : String(e);
-      return;
-    } finally {
-      loading = false;
-    }
-
-    // 短縮URLは詳細APIにしか含まれない。クリック後に取りに行くと transient user
-    // activation が切れて navigator.share() が NotAllowedError になるため先読みする。
-    linksPending = checkins.length;
-    await Promise.all(
-      checkins.map(async (c) => {
-        try {
-          const url = await fetchCheckinShortUrl(token, c.id);
-          if (url) shortUrls[c.id] = url;
-        } catch {
-          // 取れなければ URL 無しでシェアする
-        } finally {
-          linksPending -= 1;
+      try {
+        checkins = await fetchRecentCheckins(token);
+      } catch (e) {
+        if (e instanceof FoursquareError && e.isAuthError) {
+          onunauthorized();
+          return;
         }
-      }),
-    );
+        error = e instanceof Error ? e.message : String(e);
+        return;
+      } finally {
+        loading = false;
+      }
+
+      // 短縮URLは詳細APIにしか含まれない。クリック後に取りに行くと transient user
+      // activation が切れて navigator.share() が NotAllowedError になるため先読みする。
+      linksPending = checkins.length;
+      await Promise.all(
+        checkins.map(async (c) => {
+          try {
+            const url = await fetchCheckinShortUrl(token, c.id);
+            if (url) shortUrls[c.id] = url;
+          } catch {
+            // 取れなければ URL 無しでシェアする
+          } finally {
+            linksPending -= 1;
+          }
+        }),
+      );
+    } finally {
+      inFlight = false;
+      onbusychange?.(false);
+    }
   };
 
   onMount(load);
+
+  /** ヘッダーの更新ボタンから呼ばれる（bind:this 経由のコンポーネントエクスポート） */
+  export function reload(): void {
+    void load();
+  }
 
   // ここは同期関数のままにすること。await を挟むと share() が失敗する。
   const shareCheckin = (checkin: Checkin) => {
@@ -95,7 +120,7 @@
     });
 </script>
 
-{#if loading}
+{#if loading && checkins.length === 0}
   <p class="status">読み込み中…</p>
 {:else if error}
   <p class="status error" role="alert">{error}</p>
@@ -159,8 +184,6 @@
       </li>
     {/each}
   </ul>
-
-  <button class="reload" onclick={load}>再読み込み</button>
 {/if}
 
 {#if toast}
@@ -265,11 +288,6 @@
     stroke-width: 1.8;
     stroke-linecap: round;
     stroke-linejoin: round;
-  }
-
-  .reload {
-    margin-top: 1.2rem;
-    width: 100%;
   }
 
   .toast {
