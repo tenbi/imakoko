@@ -3,7 +3,7 @@
   import {
     FoursquareError,
     fetchCheckinShortUrl,
-    fetchRecentCheckins,
+    fetchCheckins,
     type Checkin,
   } from './foursquare';
   import { buildShareText, buildTweetUrl, canUseWebShare } from './share';
@@ -19,6 +19,9 @@
   } = $props();
 
   let checkins = $state<Checkin[]>([]);
+  let total = $state(0);
+  let loadingMore = $state(false);
+  const hasMore = $derived(checkins.length < total);
   let shortUrls = $state<Record<string, string>>({});
   let loading = $state(true);
   let linksPending = $state(0);
@@ -39,6 +42,36 @@
   // inFlight で行う（loading の初期値が true のため、これで兼用すると初回が走らない）。
   let inFlight = false;
 
+  /**
+   * 短縮URLは詳細APIにしか含まれない。クリック後に取りに行くと transient user
+   * activation が切れて navigator.share() が NotAllowedError になるため先読みする。
+   * 1件につき1リクエストなので、取得済みのぶんは対象にしない。
+   */
+  const prefetchShortUrls = async (targets: Checkin[]) => {
+    linksPending += targets.length;
+    await Promise.all(
+      targets.map(async (c) => {
+        try {
+          const url = await fetchCheckinShortUrl(token, c.id);
+          if (url) shortUrls[c.id] = url;
+        } catch {
+          // 取れなければ URL 無しでシェアする
+        } finally {
+          linksPending -= 1;
+        }
+      }),
+    );
+  };
+
+  const handleError = (e: unknown): void => {
+    if (e instanceof FoursquareError && e.isAuthError) {
+      onunauthorized();
+      return;
+    }
+    error = e instanceof Error ? e.message : String(e);
+  };
+
+  /** 先頭ページを取り直す。更新ボタンと初回マウントから呼ばれる */
   const load = async () => {
     if (inFlight) return; // 連打で読み込みが重ならないようにする
     inFlight = true;
@@ -48,36 +81,43 @@
     shortUrls = {};
 
     try {
+      let page;
       try {
-        checkins = await fetchRecentCheckins(token);
+        page = await fetchCheckins(token, 0);
       } catch (e) {
-        if (e instanceof FoursquareError && e.isAuthError) {
-          onunauthorized();
-          return;
-        }
-        error = e instanceof Error ? e.message : String(e);
+        handleError(e);
         return;
       } finally {
         loading = false;
       }
 
-      // 短縮URLは詳細APIにしか含まれない。クリック後に取りに行くと transient user
-      // activation が切れて navigator.share() が NotAllowedError になるため先読みする。
-      linksPending = checkins.length;
-      await Promise.all(
-        checkins.map(async (c) => {
-          try {
-            const url = await fetchCheckinShortUrl(token, c.id);
-            if (url) shortUrls[c.id] = url;
-          } catch {
-            // 取れなければ URL 無しでシェアする
-          } finally {
-            linksPending -= 1;
-          }
-        }),
-      );
+      checkins = page.items;
+      total = page.total;
+      await prefetchShortUrls(page.items);
     } finally {
       inFlight = false;
+      onbusychange?.(false);
+    }
+  };
+
+  /** 「もっと読む」。今表示している件数を offset にして次のページを足す */
+  const loadMore = async () => {
+    if (inFlight) return;
+    inFlight = true;
+    loadingMore = true;
+    onbusychange?.(true);
+    error = null;
+
+    try {
+      const page = await fetchCheckins(token, checkins.length);
+      checkins = [...checkins, ...page.items];
+      total = page.total;
+      await prefetchShortUrls(page.items);
+    } catch (e) {
+      handleError(e);
+    } finally {
+      inFlight = false;
+      loadingMore = false;
       onbusychange?.(false);
     }
   };
@@ -122,12 +162,17 @@
 
 {#if loading && checkins.length === 0}
   <p class="status">読み込み中…</p>
-{:else if error}
+{:else if error && checkins.length === 0}
   <p class="status error" role="alert">{error}</p>
   <button onclick={load}>再試行</button>
 {:else if checkins.length === 0}
   <p class="status">チェックインがありません。</p>
 {:else}
+  <!-- 追加読み込みが失敗しても一覧は残す -->
+  {#if error}
+    <p class="status error" role="alert">{error}</p>
+  {/if}
+
   {#if linksPending > 0}
     <p class="status subtle">リンクを取得中…（今シェアするとリンク無しになります）</p>
   {/if}
@@ -145,6 +190,7 @@
           {/if}
           <span class="time">{formatTime(checkin.createdAt)}</span>
         </div>
+
         <div class="actions">
           <a
             class="icon-button"
@@ -184,6 +230,12 @@
       </li>
     {/each}
   </ul>
+
+  {#if hasMore}
+    <button class="more" onclick={loadMore} disabled={loadingMore}>
+      {loadingMore ? '読み込み中…' : `もっと読む（残り ${total - checkins.length} 件）`}
+    </button>
+  {/if}
 {/if}
 
 {#if toast}
@@ -288,6 +340,11 @@
     stroke-width: 1.8;
     stroke-linecap: round;
     stroke-linejoin: round;
+  }
+
+  .more {
+    margin-top: 1.2rem;
+    width: 100%;
   }
 
   .toast {

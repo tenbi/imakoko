@@ -10,6 +10,11 @@
   let list = $state<{ reload: () => void } | undefined>();
   let refreshing = $state(false);
 
+  // 更新ボタンの隣にあるため誤タップしやすい。ネイティブの confirm() は
+  // standalone 表示だとオリジン名が題名に出て分かりにくいので、
+  // アプリ内の <dialog> で明示的に確認する。
+  let confirmDialog = $state<HTMLDialogElement | undefined>();
+
   const onSaved = (saved: string) => {
     token = saved;
     notice = null;
@@ -21,8 +26,10 @@
     notice = 'トークンが無効になっていました。取得し直して貼り付けてください。';
   };
 
-  const disconnect = () => {
-    if (!confirm('この端末に保存したトークンを削除しますか？')) return;
+  const disconnect = () => confirmDialog?.showModal();
+
+  const confirmDisconnect = () => {
+    confirmDialog?.close();
     clearToken();
     token = null;
     notice = null;
@@ -51,10 +58,22 @@
           <path d="M21 3v5h-5" />
         </svg>
       </button>
-      <button onclick={disconnect}>切断</button>
+      <button class="disconnect" onclick={disconnect}>切断</button>
     </div>
   {/if}
 </header>
+
+<dialog bind:this={confirmDialog} class="confirm">
+  <h2>切断しますか？</h2>
+  <p>この端末に保存したアクセストークンを削除します。</p>
+  <p class="sub">
+    Swarm のチェックイン履歴は消えません。トークンを貼り付け直せば元に戻せます。
+  </p>
+  <div class="dialog-actions">
+    <button onclick={() => confirmDialog?.close()}>キャンセル</button>
+    <button class="danger" onclick={confirmDisconnect}>切断する</button>
+  </div>
+</dialog>
 
 {#if notice}
   <p class="notice" role="alert">{notice}</p>
@@ -88,7 +107,12 @@
   .header-actions {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    /* 更新と切断の誤タップを減らすため、隣接ボタンより広めに離す */
+    gap: 0.9rem;
+  }
+
+  .disconnect {
+    color: var(--danger);
   }
 
   .icon-button {
@@ -125,6 +149,49 @@
     .icon-button svg.spinning {
       animation: none;
     }
+  }
+
+  .confirm {
+    margin: auto;
+    max-width: min(24rem, calc(100vw - 2rem));
+    padding: 1.3rem;
+    border: 1px solid var(--border);
+    border-radius: 0.9rem;
+    background: var(--surface);
+    color: var(--text);
+  }
+
+  .confirm::backdrop {
+    background: rgb(0 0 0 / 45%);
+  }
+
+  .confirm h2 {
+    margin: 0 0 0.7rem;
+    font-size: 1.05rem;
+  }
+
+  .confirm p {
+    margin: 0 0 0.5rem;
+    line-height: 1.7;
+  }
+
+  .confirm .sub {
+    color: var(--muted);
+    font-size: 0.85rem;
+  }
+
+  .dialog-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.6rem;
+    margin-top: 1.2rem;
+  }
+
+  .dialog-actions .danger {
+    background: var(--danger);
+    border-color: var(--danger);
+    color: #fff;
+    font-weight: 600;
   }
 
   .notice {

@@ -68,6 +68,17 @@ curl -s "https://foursquare.com/oauth2/access_token?client_id=CLIENT_ID&client_s
 公開した URL を開き、トークンを貼り付けて「確認して保存」。
 `/users/self` を呼んで有効性を確認してから localStorage に保存する。
 
+## 取得件数とレート制限
+
+一覧は1ページ5件で、遡りたいときは「もっと読む」で追加取得する（`src/lib/config.ts` の `PAGE_SIZE`）。
+
+短縮URLは `/checkins/{id}` にしか含まれないため、1件につき1リクエストの先読みが要る。
+つまり **1ページの読み込み = 一覧1回 + 詳細 PAGE_SIZE 回**。
+
+Foursquare の personalization API は「エンドポイント群ごと・OAuth アプリごと・ユーザーごとに
+1時間あたり500リクエスト」なので、`PAGE_SIZE = 5` なら詳細側は1時間に100回の読み込みが上限になる。
+この値を増やすとそのぶん上限が下がる。
+
 ## デプロイ
 
 `main` に push すると GitHub Actions が GitHub Pages に公開する。
