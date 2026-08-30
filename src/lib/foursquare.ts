@@ -1,4 +1,4 @@
-import { API_VERSION, CHECKIN_LIMIT } from './config';
+import { API_VERSION, PAGE_SIZE } from './config';
 
 const API_BASE = 'https://api.foursquare.com/v2';
 
@@ -58,9 +58,21 @@ export const verifyToken = async (token: string): Promise<void> => {
   await call('/users/self', token);
 };
 
-export const fetchRecentCheckins = async (token: string): Promise<Checkin[]> => {
-  const res = await call('/users/self/checkins', token, { limit: String(CHECKIN_LIMIT) });
-  return res?.checkins?.items ?? [];
+export type CheckinPage = {
+  items: Checkin[];
+  /** 全チェックイン数。まだ先があるかの判定に使う */
+  total: number;
+};
+
+export const fetchCheckins = async (token: string, offset = 0): Promise<CheckinPage> => {
+  const res = await call('/users/self/checkins', token, {
+    limit: String(PAGE_SIZE),
+    offset: String(offset),
+  });
+  return {
+    items: res?.checkins?.items ?? [],
+    total: res?.checkins?.count ?? 0,
+  };
 };
 
 /** 短縮URL（https://www.swarmapp.com/c/...）は詳細APIにしか含まれない */
