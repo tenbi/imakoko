@@ -70,7 +70,7 @@ curl -s "https://foursquare.com/oauth2/access_token?client_id=CLIENT_ID&client_s
 
 ## 取得件数とレート制限
 
-一覧は1ページ5件で、遡りたいときは「もっと読む」で追加取得する（`src/lib/config.ts` の `PAGE_SIZE`）。
+一覧は1ページ5件で、遡りたいときは「さかのぼる」で追加取得する（`src/lib/config.ts` の `PAGE_SIZE`）。
 
 短縮URLは `/checkins/{id}` にしか含まれないため、1件につき1リクエストの先読みが要る。
 つまり **1ページの読み込み = 一覧1回 + 詳細 PAGE_SIZE 回**。
@@ -78,6 +78,17 @@ curl -s "https://foursquare.com/oauth2/access_token?client_id=CLIENT_ID&client_s
 Foursquare の personalization API は「エンドポイント群ごと・OAuth アプリごと・ユーザーごとに
 1時間あたり500リクエスト」なので、`PAGE_SIZE = 5` なら詳細側は1時間に100回の読み込みが上限になる。
 この値を増やすとそのぶん上限が下がる。
+
+## 自動再取得
+
+アプリが前面に戻ったとき（`visibilitychange` / `pageshow`）、先頭ページを取り直す。
+Swarm でチェックインして戻ってきたときに手動更新が要らなくなる。
+
+暴発を避けるためのガードが2つある。
+
+- 直近の取得から `VISIBILITY_RELOAD_INTERVAL_MS`（60秒）以内なら何もしない。
+  通知センターを下ろすだけでも `visible` は飛ぶため
+- 「さかのぼる」で2ページ目以降を読んでいるときは走らせない。読んだぶんを勝手に捨てないため
 
 ## デプロイ
 

@@ -7,6 +7,7 @@
     type Checkin,
   } from './foursquare';
   import { buildShareText, buildTweetUrl, canUseWebShare } from './share';
+  import { PAGE_SIZE, VISIBILITY_RELOAD_INTERVAL_MS } from './config';
 
   let {
     token,
@@ -41,6 +42,9 @@
   // loading は「初回の読み込み中表示」用。多重実行の抑止は $state ではない
   // inFlight で行う（loading の初期値が true のため、これで兼用すると初回が走らない）。
   let inFlight = false;
+
+  /** 直近に API を叩いた時刻。前面復帰時の自動再取得を間引くために使う */
+  let lastLoadedAt = 0;
 
   /**
    * 短縮URLは詳細APIにしか含まれない。クリック後に取りに行くと transient user
@@ -96,11 +100,12 @@
       await prefetchShortUrls(page.items);
     } finally {
       inFlight = false;
+      lastLoadedAt = Date.now();
       onbusychange?.(false);
     }
   };
 
-  /** 「もっと読む」。今表示している件数を offset にして次のページを足す */
+  /** さかのぼる。今表示している件数を offset にして次のページを足す */
   const loadMore = async () => {
     if (inFlight) return;
     inFlight = true;
@@ -118,11 +123,37 @@
     } finally {
       inFlight = false;
       loadingMore = false;
+      lastLoadedAt = Date.now();
       onbusychange?.(false);
     }
   };
 
-  onMount(load);
+  onMount(() => {
+    void load();
+
+    // Swarm でチェックインして戻ってきたときに、手動更新なしで最新化する。
+    const maybeReload = () => {
+      if (document.visibilityState !== 'visible') return;
+
+      // 通知センターを下ろすだけでも visible は飛ぶ。取り直しは
+      // /checkins/{id} を PAGE_SIZE 回叩くので、短い間隔では走らせない。
+      if (Date.now() - lastLoadedAt < VISIBILITY_RELOAD_INTERVAL_MS) return;
+
+      // さかのぼって読んだぶんを勝手に捨てないよう、先頭ページ表示中だけにする。
+      if (checkins.length > PAGE_SIZE) return;
+
+      void load();
+    };
+
+    document.addEventListener('visibilitychange', maybeReload);
+    // タブの戻る/進むは bfcache から復元され visibilitychange が飛ばないことがある
+    window.addEventListener('pageshow', maybeReload);
+
+    return () => {
+      document.removeEventListener('visibilitychange', maybeReload);
+      window.removeEventListener('pageshow', maybeReload);
+    };
+  });
 
   /** ヘッダーの更新ボタンから呼ばれる（bind:this 経由のコンポーネントエクスポート） */
   export function reload(): void {
@@ -233,7 +264,7 @@
 
   {#if hasMore}
     <button class="more" onclick={loadMore} disabled={loadingMore}>
-      {loadingMore ? '読み込み中…' : `もっと読む（残り ${total - checkins.length} 件）`}
+      {loadingMore ? '読み込み中…' : 'さかのぼる'}
     </button>
   {/if}
 {/if}
